@@ -1,0 +1,84 @@
+---
+title: "Assignment 1"
+author: "Cassandra Coste"
+date: "2/6/2021"
+output:
+  html_document:
+    code_folding: hide
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+Data is provided by Fivethirtyeight and is accessed via the fivethirtyeight library. 
+
+The dataset was used for the article "The Economic Guide To Picking A College Major" found here: https://fivethirtyeight.com/features/the-economic-guide-to-picking-a-college-major/
+
+The dataset can also be found here:
+
+https://github.com/fivethirtyeight/data/blob/master/college-majors/recent-grads.csv
+
+## About the Data
+
+The data was originally pulled from American Community Survey 2010-2012 Public Use Microdata Series. The article utilizes several datasets but this anaylsis will focus on recent graduates. The data includes a graduate's major, the field that their major falls into, median income for the major, and numbers of graduates in jobs that utilize their college degree versus number of graduates in low-wage jobs.
+
+Of interest is which fields contain majors with the most economic return both in terms of income and proportion of graduates utilizing their college degrees in their current employment. 
+
+
+## Load libraries and view dataframe
+
+The dataframe is accessed via the fivethirtyeight library. 
+
+```{r read_data, message=FALSE, warning=FALSE}
+
+library(fivethirtyeight)
+library(tidyverse)
+library(ggplot2)
+head(college_recent_grads)
+```
+
+## Subset and Transform Data
+
+Transformations applied to the dataset:
+
+1) Variables relevant to the analysis were selected. These include major, field the major falls into, total number of recent graduates in the major, unemployment rate, median income, number in jobs requiring a college education, and number in low-wage  jobs. 
+
+2) Data is grouped by the field that the major falls under. 
+
+3) Median income is computed by field that major falls under. In addition, variables for percent of graduates in jobs requiring a college degree by field, and percent of graduates in low wage jobs by field.
+
+
+```{r hashtag, echo=TRUE, message=FALSE, warning=FALSE}
+
+recent_grads <- college_recent_grads %>% 
+  select("major", "total", "major_category", "unemployment_rate", "median", "college_jobs", "low_wage_jobs")
+
+recent_grads <- recent_grads %>% group_by(major_category)
+
+recent_grads_bycategory <- recent_grads %>% filter(!is.na (total)) %>% summarise(median_cat = mean(median), total_cat = sum(total), collegjobs_cat = sum(college_jobs), lowwage_cat = sum(low_wage_jobs)) %>% mutate(percentcollege = collegjobs_cat / total_cat * 100, percentlowwage = lowwage_cat / total_cat * 100) 
+
+```
+
+Here we look at the new computed variables:
+
+```{r}
+head (recent_grads_bycategory)
+```
+
+## Visualizing the Data
+
+Here we take a look at the median income for graduates by the field that they majored in and see that engineering is the most lucrative field for undergraduates to major in. However, psychology and social work, humanities, and education do not provide immediate return. 
+
+```{r, fig.width=12,fig.height=6}
+
+
+
+ggplot(recent_grads_bycategory, aes(x = reorder(major_category,-median_cat), y = median_cat, fill = "red")) + geom_bar(stat="identity") +
+coord_flip() + ggtitle("Median Income by Field of Major") + ylab("Median Income (USD)") + xlab("Field of Major") + scale_y_continuous(labels = scales::dollar_format(), limits=c(0,62000)) + theme(legend.position = "none") 
+```
+
+## Conclusions
+
+With the current job market uncertainty, this article from 2014 can provide helpful guidance to young adults embarking upon their college studies. One area that the article mentions that I think can be further explored with young adults is the number of people who take jobs not requiring a college degree following graduation. Another complication to these figures as mentioned in the article is that the figures only account for those right out of college and many in psychology will go on to graduate school. This is still important for students to factor in when taking on debt or possibly asking for familial assistance to pay for school. In the context of larger discussions about student loan debt and the ethical issues that higher education must confront about what large price tags mean for undergraduates today. 
