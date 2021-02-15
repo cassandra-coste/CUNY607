@@ -1,0 +1,148 @@
+---
+title: "CUNY607_Assignment2"
+author: "Cassandra Coste"
+date: "2/14/2021"
+output:
+  html_document: default
+---
+## About the Data
+
+The data was collected via a Google Form created by classmate Sean Connin. The survey collected opinions on the Top 10 Most Watched TV Shows on Netflix in 2020, as defined by Newsweek in their article "The 25 Most-Watched TV Shows on Netflix in 2020".
+
+The response key for respondents to rate each show was:
+
+Poor - did not enjoy, would not recommend
+Fair - forgettable, would not recommend
+Average - good for filling time, neutral recommendation
+Good -  enjoyable, would watch again, would recommend 
+Excellent - a new favorite, will tell people about this movie 
+
+Of interest is which shows have higher average ratings as well as which genres are most favored by survey particpants.
+
+## Creating table and loading csv into MySQL 
+
+CREATE DATABASE Netflix;
+USE Netflix;
+
+CREATE TABLE Survey (
+            id INT NOT NULL AUTO_INCREMENT,
+            Queens_Gambit VARCHAR(255) NOT NULL,
+            Emily_Paris VARCHAR(255) NOT NULL,
+            Lucifer VARCHAR(255) NOT NULL,
+			Umbrella_Academy VARCHAR(255) NOT NULL,
+            Money_Heist VARCHAR(255) NOT NULL,
+            Dark_Desire VARCHAR(255) NOT NULL,
+            Friends VARCHAR(255) NOT NULL,
+            The_Crown VARCHAR(255) NOT NULL,
+            Ratched VARCHAR(255) NOT NULL,
+            Dark VARCHAR(255) NOT NULL,
+            Genre_Most VARCHAR(255) NOT NULL,
+            Genre_Least VARCHAR(255) NOT NULL,
+            Avg_Hours_Week INTEGER,
+            Recommended VARCHAR(255) NOT NULL,
+            PRIMARY KEY (id)
+);
+
+LOAD DATA INFILE
+'Survey_Data607.csv'
+INTO TABLE Survey FIELDS TERMINATED BY ','
+ENCLOSED BY '"' LINES TERMINATED BY '\n'
+IGNORE 1 LINES;
+
+## Load libraries
+
+```{r,load-requirements,message=FALSE,message=FALSE, warning=FALSE}
+library(datasets)
+library(tidyverse)
+library(DBI)
+library(RMySQL)
+library(splitstackshape)
+library(ggpubr)
+```
+
+```{r setup, include=FALSE, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+psswd <- ("*******")
+```
+
+## Connect MySQL 
+
+To analyze the data in RStudio, RStudio is connected to MySQL and tables are read into RStudio. 
+
+```{r,mysql-connect, message=FALSE, warning=FALSE}
+
+
+con <- dbConnect(odbc::odbc(), 
+                 .connection_string = "Driver={MySQL ODBC 8.0 Unicode Driver};",
+                 Server= "127.0.0.1", Database = "netflix", UID = "root", PWD = psswd,
+                 Port= 3306)
+
+survey_anaylsis <- dbFetch(dbSendQuery(con,
+                                    "SELECT * FROM survey"))
+
+```
+
+
+# Clean and Analyze 
+
+Here Likert scales are recoded from character variables to numeric with "Poor" corresponding to 1 up to "Excellent" corresponding with 5. Mean values for each Netflix show, excluding NA values for those who had not seen a show to give it a rating, are calculated. While this is a interesting value to look at, given the very small sample size, the mean will be heavily influenced by outliers or may even only be representing one person's view. 
+
+
+```{r, message=FALSE, warning=FALSE}
+
+survey_recoded <- survey_anaylsis %>% 
+  mutate_at(vars(2:11),
+            ~as.numeric(recode(.,
+                               "Poor"=1, 
+                               "Fair"=2,
+                               "Average"=3,
+                               "Good"=4,
+                               "Excellent"=5)))
+
+survey_recoded %>%
+  summarise(across(Queens_Gambit:Dark, mean, na.rm= TRUE))
+
+```
+
+# Clean and Analyze 
+
+In order to look a little more at people's Netflix viewing habits, the question of "Which TV and/or movie genres do you enjoy watching most?" needed the following transformations. 
+
+1) The Genre_Most column needed to be separated by commas to account for the fact that participants selected varying amounts of most enjoyed genres. 
+
+2) The new Genre_Most columns then needed to be gathered so that each participant ID could have all of their most enjoyed genres as individual values in a single column. 
+
+Now we can do a quick count of how often a genre was mentioned as being most enjoyed. 
+
+```{r, message=FALSE, warning=FALSE}
+survey_recoded <- cSplit(survey_recoded, "Genre_Most", sep=",")
+
+survey_genre <- survey_recoded %>% select("id", "Genre_Most_1", "Genre_Most_2", "Genre_Most_3", "Genre_Most_4")
+
+survey_genre_gathered <- gather(survey_genre, key = "genre_rank", value = genre, -id)
+
+survey_genre_gathered %>% group_by(genre) %>% summarize(n = n()) %>% arrange(desc(n))
+
+```
+
+# Visualize 
+
+To visualize the most enjoyed genres in another format, the data can be placed into the below pie chart. 
+
+```{r, fig.width=10,fig.height=6, message=FALSE, warning=FALSE}
+
+genre_pie<- survey_genre_gathered %>%
+  group_by(genre) %>% drop_na(genre) %>%
+summarize(n = n()) %>% arrange(desc(n))
+
+ggpubr::ggpie(genre_pie, "n", main = "Self-reported Most Enjoyed Genres", label = "genre",  legend = "right",
+                fill = "genre", color = "white", 
+                palette = "RdBu") 
+```
+
+
+# Conclusion
+
+This is a base exploratory analysis of people's Netflix viewing habits, utilizing a small sample. Further evaluation of viewing trends with a larger population, and and which genres are given higher rankings over different time periods would be interesting. One way would to do this would be to pull twitter data over time, and analyze show's popularity in on Twitter, corresponding social events, and possibly do a sentiment analysis, to see if there is variation in genres being consumed. 
+
