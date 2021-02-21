@@ -1,0 +1,195 @@
+---
+title: "CUNY 607 Assignment 3"
+author: "Cassandra Coste"
+date: "2/15/2021"
+output:
+   html_document:
+    theme: journal
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### Load libraries
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(fivethirtyeight)
+library(tidyverse)
+library(ggplot2)
+```
+
+
+
+#### Provide code that identifies the majors that contain either “DATA” or “STATISTICS”
+
+Utilizing the fivethirtyeight College Majors dataset from the following article [https://fivethirtyeight.com/features/the-economic-guide-to-picking-a-college-major/],how many times does the word Data or Statistics appear? 
+
+```{r}
+
+college_majors = read.csv('https://raw.githubusercontent.com/fivethirtyeight/data/master/college-majors/majors-list.csv')
+
+sum(str_detect(college_majors$Major, "DATA"))
+
+sum(str_detect(college_majors$Major, "STATISTICS"))
+
+```
+
+Now we know that one major contains the word "DATA" and two majors contain the word "STATISTICS". Next, we can find out which majors these are. 
+
+```{r, message=FALSE, warning=FALSE}
+
+college_majors %>% select("Major") %>% 
+  filter(stringr::str_detect(Major, 'DATA|STATISTICS') )
+
+```
+
+
+#### Write code that transforms the data below:
+
+[1] “bell pepper” “bilberry” “blackberry” “blood orange”
+
+[5] “blueberry” “cantaloupe” “chili pepper” “cloudberry”
+
+[9] “elderberry” “lime” “lychee” “mulberry”
+
+[13] “olive” “salal berry”
+
+Into a format like this:
+
+c(“bell pepper”, “bilberry”, “blackberry”, “blood orange”, “blueberry”, “cantaloupe”, “chili pepper”, “cloudberry”, “elderberry”, “lime”, “lychee”, “mulberry”, “olive”, “salal berry”)
+
+
+```{r, message=FALSE, warning=FALSE}
+
+fruits_original <- '[1] "bell pepper"  "bilberry"     "blackberry"   "blood orange"
+
+[5] "blueberry"    "cantaloupe"   "chili pepper" "cloudberry"  
+
+[9] "elderberry"   "lime"         "lychee"       "mulberry"    
+
+[13] "olive"        "salal berry"'
+
+(fruits_original)
+
+fruits_new <- str_extract_all(fruits_original,pattern = '[A-Za-z]+.?[A-Za-z]+')
+
+(fruits_new)
+
+fruits_final <- (fruits_new) %>% 
+  str_c(collapse = ", ")
+
+(fruits_final)
+
+writeLines(fruits_final)
+
+```
+
+
+#### Describe, in words, what these expressions will match:
+
+No. 1 
+
+(.)\1\1
+
+I was not sure if we were suppose to catch something different with the quotation marks missing from No. 1 and 3, but I put this into an R readable format and proceeded, in which case it will match a character repeated three times consecutively in a string. 
+
+```{r, message=FALSE, warning=FALSE}
+
+test1 <- c("Abbb","1234","aaah", "2333")
+
+str_view(test1,"(.)\\1\\1")
+
+```
+No. 2  
+
+"(.)(.)\2\1/"
+
+This will match a two consecutive characters followed by them repeating in reverse order within a string.
+
+```{r, message=FALSE, warning=FALSE}
+
+test2 <- c("noon","boop","follow", "2332")
+
+str_view(test2,"(.)(.)\\2\\1")
+```
+
+
+No. 3 
+
+(..)\1
+
+This again was formated for R and in that case it will match a two character set repetition in a string. 
+
+
+```{r, message=FALSE, warning=FALSE}
+
+test3 <- c("4242","bidi","haha", "onno")
+
+str_view(test3,"(..)\\1")
+```
+
+
+No. 4 
+
+“(.).\1.\1”
+
+This will match a five character set where the first character is repeated as the third and fifth character within the string.
+
+```{r, message=FALSE, warning=FALSE}
+
+test4 <- c("gooog","pepep","12121", "onnno")
+
+str_view(test4,"(.).\\1.\\1")
+```
+No. 5
+
+"(.)(.)(.).*\3\2\1"
+
+This will match a three consecutive characters repeated in reverse order later within a string, and with any amount of characters between the sets of characters.
+
+```{r, message=FALSE, warning=FALSE}
+
+test5 <- c("abceeeecba","jajaj","haha", "357hello753")
+
+str_view(test5,"(.)(.)(.).*\\3\\2\\1")
+```
+
+#### Construct regular expressions to match words that:
+
+No. 1 
+
+Start and end with the same character
+
+```{r, message=FALSE, warning=FALSE}
+
+sample1 <- c("fluff","blob","haha", "tart")
+
+str_view(sample1,"^([A-Za-z]).*\\1$")
+```
+
+
+No. 2 
+
+Contain a repeated pair of letters (e.g. "church" contains "ch" repeated twice.)
+
+```{r, message=FALSE, warning=FALSE}
+
+sample2 <- c("church","blob","haha", "tart")
+
+str_view(sample2,"(..).*\\1")
+```
+
+No. 3 
+
+Contain one letter repeated in at least three places (e.g. "eleven" contains three "e"s.)
+
+```{r, message=FALSE, warning=FALSE}
+
+sample3 <- c("eleven","elderberry","haha", "tart")
+
+str_view(sample3,"(.).+\\1.+\\1")
+```
