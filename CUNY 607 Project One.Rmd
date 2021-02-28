@@ -1,0 +1,230 @@
+---
+title: "CUNY 607 Project One"
+author: "Cassandra Coste"
+date: "2/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+### Load libraries
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(knitr)
+
+```
+
+
+
+### Read in txt file to clean
+
+```{r}
+
+chess_data <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/tournamentinfo.txt", header = FALSE, stringsAsFactors = FALSE, sep = "|"))
+
+
+```
+
+Remove junk rows (code developed by classmate Gabriel Campos and shared via Slack)
+
+```{r, message=FALSE, warning=FALSE}
+
+toDelete <- seq(1, length(chess_data$V1), 3)
+toDelete
+
+chess_data  <- chess_data[-toDelete ,]
+
+```
+
+#### Tidying the dataframe
+
+Pull data for player pre-tournament rating by extracting the digit code following 'R:' 
+
+```{r, message=FALSE, warning=FALSE}
+chess_data_clean  <- extract(
+  chess_data,
+  col=V2,
+  into="Player_Rating",
+  regex = "(R: +\\d+)", 
+  remove = FALSE
+)
+```
+
+Remove extraneous characters and convert to numeric for player rating column as there is no other pertinent information there
+
+```{r, message=FALSE, warning=FALSE}
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col=Player_Rating,
+  into="Player_Rating",
+  regex = "(\\d+)", 
+  remove = FALSE,
+  convert = TRUE
+)
+```
+
+Extract round data for all 7 rounds removing the original data column 
+
+```{r, message=FALSE, warning=FALSE}
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V4,
+  into = c("Round_1"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V5,
+  into = c("Round_2"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V6,
+  into = c("Round_3"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V7,
+  into = c("Round_4"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V8,
+  into = c("Round_5"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V9,
+  into = c("Round_6"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+
+chess_data_clean  <- extract(
+  chess_data_clean,
+  col = V10,
+  into = c("Round_7"),
+  regex = "(\\d+)",
+  remove = TRUE,
+  convert = TRUE
+)
+```
+
+### Create two data frames containing necessary rows for each column and clean for join
+
+The following steps were employed: 
+
+1) Create indexes of odd and even rows to separate the data into two dataframes containing the pertinent data
+
+2) Remove first rows with messy data
+
+3) Create 'Pair' column in the even dataframe for joining them back together later
+
+4) Renames columns as necessary 
+
+5) Convert the odd dataframe 'Pair' column to numeric for join
+
+6) Select which columns from each dataframe have relevant data
+
+
+```{r, message=FALSE, warning=FALSE}
+
+even_indexes<-seq(2,130,2)
+odd_indexes<-seq(1,129,2)
+
+chess_data_even  <- chess_data_clean[-odd_indexes ,]
+
+chess_data_even = chess_data_even[-1,]
+
+chess_data_even$Pair <- seq.int(nrow(chess_data_even))
+
+chess_data_odd  <- chess_data_clean[-even_indexes ,]
+
+chess_data_odd = chess_data_odd[-1,]
+
+chess_data_odd  <- rename(chess_data_odd, Pair = V1)
+
+chess_data_odd$Pair <- as.integer(chess_data_odd$Pair)
+
+chess_data_odd <- select(chess_data_odd, -c(Player_Rating, V11)) %>% rename(Player_Name = V2) %>% rename(Total_Score = V3)
+
+chess_data_even <- select(chess_data_even, c(V1, Player_Rating, Pair)) %>% rename(Player_State = V1) 
+
+```
+
+### Make final dataframe with full join 
+
+Using a full join, the even and odd dataframes are joined via the 'Pair' column
+
+```{r, message=FALSE, warning=FALSE}
+
+chess_data_final <- full_join(chess_data_even, chess_data_odd, by = "Pair")
+
+```
+
+### Replace pair ID with player ratings for opponent for each round
+
+Create a loop that replaces players Pair ID with their player rating pre-match
+
+
+```{r, message=FALSE, warning=FALSE}
+for (i in 1:nrow(chess_data_final)) {
+  for (j in 6:12) {
+    if (!is.na(chess_data_final[i,j])) {
+      chess_data_final[i,j] <- as.numeric(chess_data_final[chess_data_final[i,j],2])
+    }
+  }
+}
+```
+
+### Calculate average opponents rating
+
+```{r, message=FALSE, warning=FALSE}
+
+chess_data_final$Average_Opponent <- rowMeans(chess_data_final[6:12], na.rm = TRUE)
+```
+
+### View final table 
+
+```{r, message=FALSE, warning=FALSE}
+
+chess_data_output <- chess_data_final %>%select(Player_Name, Player_State, Total_Score, Player_Rating, Average_Opponent) %>% mutate_if(is.numeric, format, digits=4)
+
+library(knitr) 
+
+kable(chess_data_output, col.names = c('Player Name', 'Player State', 'Total Number of Points', 'Player Pre-Rating', 'Average Rating of Opponents'), align = "ccrrr", caption = "Chess Tournament Scorecard")
+```
+
+### Write CSV
+ 
+Code to export final dataframe to CSV
+
+``` {r}
+
+write.csv(chess_data_output,"chess_data_output.csv", row.names = FALSE)
+ 
