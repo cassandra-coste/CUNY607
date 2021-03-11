@@ -23,7 +23,7 @@ library(kableExtra)
 
 ## Introduction 
 
-In this project we will tidy three datasets using TidyR and Dyplr and other handy R tools. After the transformation we will conduct some analyses. This is a joint project with Eric Hirsch and Dan Sullivan.  We each cleaned a data set and then showed each other what our challenges were and how we overcame them. This set data set was the data set that I tidied.
+In this project we will tidy three datasets using TidyR and Dyplr and other handy R tools. After the transformation we will conduct some analyses. This is a joint project with Eric Hirsch and Dan Sullivan.  We each cleaned a data set and then showed each other what our challenges were and how we overcame them. This data set was the data set that I tidied.
 
 
 ### Dataset 2: The Upshot - Prison Admissions by County
@@ -44,7 +44,7 @@ States where data was sourced directly from state departments of corrections or 
 
 The primary issue with the data set is that it contains years in the variable names for three different variables. The goal is to get to a data set with columns for the three prison admission variables and one for year. 
 
-Additionally, to gain insight into this data and look at some of the things that the article was referring to, new variables new to be computed and more county data is needed that was not made available by The Upshot. I will merge county data (2.b) from a separate source to perform the final analysis on my chosen dataset. 
+Additionally, to gain insight into this data and look at some of the things that the article was referring to, new variables need to be computed and more county data is needed that was not made available by The Upshot. I will merge county data (2.b) from a separate source to perform the final analysis on my chosen dataset. 
 
 
 #### Read in 2.a dataset
