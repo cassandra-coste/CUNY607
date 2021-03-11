@@ -1,0 +1,220 @@
+---
+title: "CUNY 607 Project 2"
+author: "Cassandra Coste"
+date: "3/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Tidying Three Datasets
+
+#### Load libraries
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+
+```
+
+## Introduction 
+
+In this project we will tidy three datasets using TidyR and Dyplr and other handy R tools. After the transformation we will conduct some analyses. This is a joint project with Eric Hirsch and Dan Sullivan.  We each cleaned a data set and then showed each other what our challenges were and how we overcame them. This set data set was the data set that I tidied.
+
+
+### Dataset 2: The Upshot - Prison Admissions by County
+
+
+
+*Description of the dataset:*
+
+The untidy dataset that I selected was used by The Upshot NYT in their article "A Small Indiana County Sends More People to Prison Than San Francisco and Durham, N.C., Combined. Why?" to report on the increase in rural prison populations in recent years. 
+
+The original data was sourced for the article from National Corrections Reporting Program (NCRP). 
+
+There was an additional validation of NCRP data made by comparing admissions numbers to the National Prisoner Statics Program (NPS) or data from individual state departments of corrections. State data years with large differences in admissions numbers between NCRP and NPS (greater than 20 percent) were excluded unless the NCRP numbers could be independently validated. 
+
+States where data was sourced directly from state departments of corrections or sentencing commissions can be identified via the Source column.
+
+*Challenges with the data set:*
+
+The primary issue with the data set is that it contains years in the variable names for three different variables. The goal is to get to a data set with columns for the three prison admission variables and one for year. 
+
+Additionally, to gain insight into this data and look at some of the things that the article was referring to, new variables new to be computed and more county data is needed that was not made available by The Upshot. I will merge county data (2.b) from a separate source to perform the final analysis on my chosen dataset. 
+
+
+#### Read in 2.a dataset
+
+```{r}
+
+prison_admissions_raw <- as.data.frame(read.delim("https://raw.githubusercontent.com/TheUpshot/prison-admissions/master/county-prison-admissions.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+head(prison_admissions_raw) %>%
+  kbl(caption = "Raw Data Imported from The Upshot") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Tidy the data
+
+
+
+```{r, message=FALSE, warning=FALSE}
+
+# Remove unneeded columns
+# Remove extraneous "county" from every county name
+# Convert admissions columns to numeric
+# Calculate percent change from 2006 to 2014
+
+prison_admissions_tidy <- select(prison_admissions_raw, -c(valid06, valid13, valid14)) %>%
+    mutate(county = str_remove_all(county, " County")) %>% mutate_at(c('admissions2006', 'admissions2013', 'admissions2014'), as.numeric) %>% mutate(percent_change = (admitsPer10k2014 - admitsPer10k2006) / admitsPer10k2006 * 100)
+
+
+
+```
+
+The biggest task in tidying this data is to transform the data from wide to long for three variables over three time points. 
+
+I am still working on a way to do this using pivot_longer, but I found the most freedom with the reshape function from base R to use the varying argument to denote that I want to gather the different column groups at once the best so far. 
+
+```{r, message=FALSE, warning=FALSE}
+
+# Transform data from wide to long for population, admissions, and admitsper10k variables
+
+prison_admissions_long <- reshape(
+  data = prison_admissions_tidy,
+  idvar = "county",
+  varying = list(c(4:6), c(7:9), c(10:12)),
+  sep = "",
+  v.names = c(
+    'prison_admitsper10k',
+    'county_population',
+    'prison_admissions'
+  ),
+  timevar = "year",
+  times = c(2006, 2013, 2014),
+  new.row.names = 1:10000,
+  direction = "long"
+)
+
+head(prison_admissions_long) %>%
+  kbl(caption = "Prison Long Data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Read in 2.b dataset
+
+This data set comes from the U.S. Department of Agriculture's Economic Research Service and was a data file pulled from their Atlas of Rural and Small-Town America on County Classifications. Of importance to the prison data set, this provides county level measures of urbanicity, originally coded from 1-9, with 1-3 being metropolitan areas, 4-7 being urban areas subdivided by their size and proximity to a metropolitan area, and finally 8-9 being rural counties. This analysis also keeps an SES measure, a binary variable called persistent poverty, defined as 20 percent or more of residents were poor when measured by each of the 1980, 1990, 2000 censuses, and 2007-11 American Community Survey 5-year average.
+
+```{r, message=FALSE, warning=FALSE}
+
+county_data <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/County%20Classifications.csv", header = TRUE, stringsAsFactors = FALSE, sep = ",", fileEncoding = "UTF-8-BOM"))
+
+head(county_data) %>%
+  kbl(caption = "Raw Data Imported from The USDA") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Tidy the data
+
+```{r, message=FALSE, warning=FALSE}
+
+# Use Select to isolate the columns with relevant data
+# Change rural-urban continuum code to labeled categories measuring urbanicity 
+# Drop RuralUrbanContinuum columns after new measure is created 
+
+county_data_tidy <-
+  county_data %>% select(
+    FIPStxt,
+    State,
+    County,
+    RuralUrbanContinuumCode2013,
+    RuralUrbanContinuumCode2003,
+    PersistentPoverty2000
+  ) %>%
+  mutate(urbanicity2013 = ifelse(
+    RuralUrbanContinuumCode2013 %in% 1:3,
+    "Metropolitan",
+    ifelse(
+      RuralUrbanContinuumCode2013  %in% c("4", "6"),
+      "Urban_Adjacent",
+      ifelse(
+        RuralUrbanContinuumCode2013  %in% c("5", "7"),
+        "Urban_NonAdjacent",
+        ifelse(RuralUrbanContinuumCode2013  %in% c("8", "9"),
+               "Rural",
+               NA)
+      )
+    )
+  )) %>%
+  
+  mutate(urbanicity2003 = ifelse(
+    RuralUrbanContinuumCode2003 %in% 1:3,
+    "Metropolitan",
+    ifelse(
+      RuralUrbanContinuumCode2003  %in% c("4", "6"),
+      "Urban_Adjacent",
+      ifelse(
+        RuralUrbanContinuumCode2003  %in% c("5", "7"),
+        "Urban_NonAdjacent",
+        ifelse(RuralUrbanContinuumCode2003  %in% c("8", "9"),
+               "Rural",
+               NA)
+      )
+    )
+  )) %>% select(-c(RuralUrbanContinuumCode2003, RuralUrbanContinuumCode2013))
+
+head(county_data_tidy)%>%
+  kbl(caption = "County Data with Relevant Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Join the two datasets
+
+```{r, message=FALSE, warning=FALSE}
+
+# Use a right join to add county level data to the tidy version of the prison admissions data
+
+prison_data_joined <- prison_admissions_long  %>% right_join(county_data_tidy, by=c("fips" = "FIPStxt", "state" = "State", "county" = "County")) 
+
+# Assign 2003 data or 2013 data based on whether prison admissions data is from 2006, 2013, or 2014. The 2003 urbanicity data is based on the 2000 census and should be used for 2006, while the 2013 urbanicity is based on the 2010 census and should be used for the 2013 and 2014 data. 
+
+# Remove Urbanicity2003 and urbanicity2013 columns as no longer needed
+# Round numeric columns for presentation as calculations are done
+
+
+prison_data_final <- within(prison_data_joined, {
+  urbanicity <- ifelse(year == "2006",
+                       paste(urbanicity2003),
+                       ifelse(
+                         year == "2013",
+                         paste(urbanicity2013),
+                         ifelse(year == "2014", paste(urbanicity2013), NA)
+                       ))
+}) %>% select(-c(urbanicity2003, urbanicity2013)) %>% rename(persistent_poverty = PersistentPoverty2000) %>% mutate(across(where(is.numeric), round, 2))
+
+# Convert year variable from numeric to factor 
+
+prison_data_final$year <-as.factor(prison_data_final$year)
+
+head(prison_data_final) %>%
+  kbl(caption = "Prison and County Data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+#### Analysis
+
+```{r, message=FALSE, warning=FALSE}
+
+prison_visualize <- prison_data_final %>% drop_na(prison_admitsper10k, year, urbanicity)
+
+
+ggplot(prison_visualize, aes(y=prison_admitsper10k, x=year, fill=urbanicity)) + 
+    geom_bar(position="dodge", stat="identity")
+
+ 
+```
