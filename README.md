@@ -1,2 +1,0 @@
-# CUNY607
-CUNY 607 Projects
