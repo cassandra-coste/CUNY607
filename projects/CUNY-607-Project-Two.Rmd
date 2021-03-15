@@ -1,0 +1,438 @@
+---
+title: "CUNY 607 Project 2"
+author: "Cassandra Coste"
+date: "3/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project 2 - Tidying Three Datasets
+
+Team members: Eric Hirsch, Dan Sullivan, Cassie Coste
+
+## Introduction 
+
+In this project we will tidy three datasets using TidyR and Dyplr and other handy R tools. After the transformation we will conduct some analyses. This is a joint project with Eric Hirsch and Dan Sullivan. We each cleaned a data set and then showed each other what our challenges were and how we overcame them. This second data set was the data set that I tidied.
+
+#### Dataset 1: Bureau of Labor Statistics Data
+
+The data consists of six CSV files from the Bureau of Labor Statistics showing numbers of Americans involved in various occupations and industries, spanning the years 2015 through 2020. Each file is in the same format. The data set is “wide” – occupations run horizontally and industries run vertically.
+
+*Challenges:*
+
+ 1. The data set needs to be converted from wide to long, and needs to include a year column and a demographic column.
+ 2. The industries which run vertically are repeated six times - for two genders, three races, and a total. These will need to be collected together.
+ 3. The race categories do not add up to the total because they don’t comprise all of the possible races. Therefore an “other race” category will need to calculated and then created.
+ 4. The occupations do not appear at the top of the raw data (they appear in the fifth row), which means they need to be extracted and inserted as column headings for the data set. There are a number of issues with these column headings - for example, they are too long, and they include the insertion of dashes and carriage returns which will need to be removed.
+ 5. Some of the rows are summary rows and will need to be removed. In some cases, remaining rows will need to be renamed as they don’t make sense standing alone without the summary row.
+ 6. All of the years of the data set need to be appended to the data frame
+ 7. The demographic categories (race, gender and total) need to be spread out as columns and arranged in order.
+
+
+#### Dataset 2 - The Upshot - Prison Admissions by County
+
+This dataset is a long dataset used by The Upshot NYT in their article “A Small Indiana County Sends More People to Prison Than San Francisco and Durham, N.C., Combined. Why?” to report on the increase in rural prison populations in recent years.
+
+*Challenges:* 
+
+The primary issue with the data set is that it contains years in the variable names for three different variables. The goal is to get to a data set with columns for the three prison admission variables and one for the year. There are also some minor tidying edits such as converting columns to numeric or factor and or removing/adding words to columns or column names.
+
+As this dataset is only part of the picture that was being looked at by The Upshot, to gain further insight into this dataset and look at some of the things that the article was referring to as well as comments made in the class discussion board, new variables need to be computed and more county data is needed that was not made available by The Upshot. For county data, an additional dataset (2.b) from the US Department of Agriculture (USDA) is joined with The Upshot dataset to perform the final analyses.
+
+This county dataset had its own set of challenges. There is a rural-urban variable at two time points that is on a 1-9 spectrum and will be re-coded to match Metropolitan/Urban/Rural categories provided by the USDA. When these variables are incorporated into the original dataset, the rural-urban variable must then be made long through the creation of a new variable using ifelse statements to make sure that prison county data from the 2000s receives the urbanicity variable from the 2000 census and county data from the 2010s receives the urbanicity variable from the 2010 census.
+
+#### Dataset 3 - Historic Epidemic Data
+
+Dataset three Uses historic epidemic data as well as estimates and measurements on global population in the form of two separate tables for pre 1950 populations and post 1950 populations. It incorporates these three csv to get estimates on how impactful certain epidemics were based on the total deaths as compared to global population.
+
+*Challenges:*
+
+The biggest challenge with this data was data formation. It contained many pieces of data that were mixed strings and numbers, notes within data points, as well as hyperlink references. Because many columns were not standardized I used a lot of regex to tackle a lot of these issues ultimately paring things down to a point where the values could be standardized and used.
+
+The next challenge was creating a metric to join population data that fluctuated depending on the year. I found population data that was yearly from 1950-2017, by decade from 1900-1950 and every century from 1AD to 1900. Because of this I had to make my own rounding function. where depending on what year the event was it rounded so that population metrics could be added accordingly.
+
+
+#### Load libraries
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(plotly)
+library(hrbrthemes)
+library(scales)
+library(patchwork)
+
+```
+
+### Dataset 2: The Upshot - Prison Admissions by County {.tabset}
+
+
+*Description of the dataset:*
+
+The untidy dataset that I selected was used by The Upshot NYT in their article "A Small Indiana County Sends More People to Prison Than San Francisco and Durham, N.C., Combined. Why?" to report on the increase in rural prison populations in recent years. 
+
+The original data was sourced for the article from the National Corrections Reporting Program (NCRP). 
+
+There was an additional validation of NCRP data made by comparing admissions numbers to the National Prisoner Statics Program (NPS) or data from individual state departments of corrections. State data years with large differences in admissions numbers between NCRP and NPS (greater than 20 percent) were excluded unless the NCRP numbers could be independently validated. 
+
+States where data was sourced directly from state departments of corrections or sentencing commissions can be identified via the Source column.
+
+*Challenges with the data set:*
+
+The primary issue with the data set is that it contains years in the variable names for three different variables. The goal is to get to a data set with columns for the three prison admission variables and one for year. 
+
+Additionally, to gain insight into this data and look at some of the things that the article was referring to, new variables need to be computed and more county data is needed that was not made available by The Upshot. I will merge county data (2.b) from a separate source to perform the final analysis on my chosen dataset. 
+
+
+#### Read in 2.a dataset
+
+```{r}
+
+prison_admissions_raw <- as.data.frame(read.delim("https://raw.githubusercontent.com/TheUpshot/prison-admissions/master/county-prison-admissions.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+head(prison_admissions_raw) %>%
+  kbl(caption = "Raw Data Imported from The Upshot") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Tidy the data
+
+
+
+```{r, message=FALSE, warning=FALSE}
+
+# Remove unneeded columns
+# Remove extraneous "county" from every county name
+# Convert admissions columns to numeric
+# Calculate percent change from 2006 to 2014
+
+prison_admissions_tidy <- select(prison_admissions_raw, -c(valid06, valid13, valid14)) %>%
+    mutate(county = str_remove_all(county, " County")) %>% mutate_at(c('admissions2006', 'admissions2013', 'admissions2014'), as.numeric) %>% mutate(percent_change = (admitsPer10k2014 - admitsPer10k2006) / admitsPer10k2006 * 100)
+
+
+
+```
+
+The biggest task in tidying this data is to transform the data from wide to long for three variables over three time points. 
+
+I am still working on a way to do this using pivot_longer, but I found the most freedom with the reshape function from base R to use the varying argument to denote that I want to gather the different column groups at once the best so far. 
+
+```{r, message=FALSE, warning=FALSE}
+
+# Transform data from wide to long for population, admissions, and admitsper10k variables
+
+prison_admissions_long <- reshape(
+  data = prison_admissions_tidy,
+  idvar = "county",
+  varying = list(c(4:6), c(7:9), c(10:12)),
+  sep = "",
+  v.names = c(
+    'prison_admitsper10k',
+    'county_population',
+    'prison_admissions'
+  ),
+  timevar = "year",
+  times = c(2006, 2013, 2014),
+  new.row.names = 1:10000,
+  direction = "long"
+)
+
+head(prison_admissions_long) %>%
+  kbl(caption = "Prison Long Data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Read in 2.b dataset
+
+This data set comes from the U.S. Department of Agriculture's Economic Research Service and was a data file pulled from their Atlas of Rural and Small-Town America on County Classifications. Of importance to the prison data set, this provides county level measures of urbanicity, originally coded from 1-9, with 1-3 being metropolitan areas, 4-7 being urban areas subdivided by their size and proximity to a metropolitan area, and finally 8-9 being rural counties. This analysis also keeps an SES measure, a binary variable called persistent poverty, defined as 20 percent or more of residents were poor when measured by each of the 1980, 1990, 2000 censuses, and 2007-11 American Community Survey 5-year average.
+
+```{r, message=FALSE, warning=FALSE}
+
+county_data <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/County%20Classifications.csv", header = TRUE, stringsAsFactors = FALSE, sep = ",", fileEncoding = "UTF-8-BOM"))
+
+head(county_data) %>%
+  kbl(caption = "Raw Data Imported from The USDA") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Tidy the data
+
+```{r, message=FALSE, warning=FALSE}
+
+# Use Select to isolate the columns with relevant data
+# Change rural-urban continuum code to labeled categories measuring urbanicity 
+# Drop RuralUrbanContinuum columns after new measure is created 
+
+county_data_tidy <-
+  county_data %>% select(
+    FIPStxt,
+    State,
+    County,
+    RuralUrbanContinuumCode2013,
+    RuralUrbanContinuumCode2003,
+    PersistentPoverty2000
+  ) %>%
+  mutate(urbanicity2013 = ifelse(
+    RuralUrbanContinuumCode2013 %in% 1:3,
+    "Metropolitan",
+    ifelse(
+      RuralUrbanContinuumCode2013  %in% c("4", "6"),
+      "Urban_Adjacent",
+      ifelse(
+        RuralUrbanContinuumCode2013  %in% c("5", "7"),
+        "Urban_NonAdjacent",
+        ifelse(RuralUrbanContinuumCode2013  %in% c("8", "9"),
+               "Rural",
+               NA)
+      )
+    )
+  )) %>%
+  
+  mutate(urbanicity2003 = ifelse(
+    RuralUrbanContinuumCode2003 %in% 1:3,
+    "Metropolitan",
+    ifelse(
+      RuralUrbanContinuumCode2003  %in% c("4", "6"),
+      "Urban_Adjacent",
+      ifelse(
+        RuralUrbanContinuumCode2003  %in% c("5", "7"),
+        "Urban_NonAdjacent",
+        ifelse(RuralUrbanContinuumCode2003  %in% c("8", "9"),
+               "Rural",
+               NA)
+      )
+    )
+  )) %>% select(-c(RuralUrbanContinuumCode2003, RuralUrbanContinuumCode2013))
+
+head(county_data_tidy)%>%
+  kbl(caption = "County Data with Relevant Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+#### Join the two datasets
+
+```{r, message=FALSE, warning=FALSE}
+
+# Use a right join to add county level data to the tidy version of the prison admissions data
+
+prison_data_joined <- prison_admissions_long  %>% right_join(county_data_tidy, by=c("fips" = "FIPStxt", "state" = "State", "county" = "County")) 
+
+# Assign 2003 data or 2013 data based on whether prison admissions data is from 2006, 2013, or 2014. The 2003 urbanicity data is based on the 2000 census and should be used for 2006, while the 2013 urbanicity is based on the 2010 census and should be used for the 2013 and 2014 data. 
+
+# Remove Urbanicity2003 and urbanicity2013 columns as no longer needed
+# Round numeric columns for presentation as calculations are done
+
+
+prison_data_final <- within(prison_data_joined, {
+  urbanicity <- ifelse(year == "2006",
+                       paste(urbanicity2003),
+                       ifelse(
+                         year == "2013",
+                         paste(urbanicity2013),
+                         ifelse(year == "2014", paste(urbanicity2013), NA)
+                       ))
+}) %>% select(-c(urbanicity2003, urbanicity2013)) %>% rename(persistent_poverty = PersistentPoverty2000) %>% mutate(across(where(is.numeric), round, 2))
+
+# Convert year variable from numeric to factor 
+
+prison_data_final$year <-as.factor(prison_data_final$year)
+
+head(prison_data_final) %>%
+  kbl(caption = "Prison and County Data") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+
+```
+
+#### Exploratory Findings and Analysis
+
+In order, to anlyza this dataset, we'll first look to see if our merged data observes the same trend as The Upshot article. Counties where admission data was not able to be obtained or was not able to be confirmed by The Upshot are being dropped from this analysis and we are assuming that there is noting systematically different about counties where admissions data is not being reported and those counties where it is. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+prison_visualize <- prison_data_final %>% drop_na(prison_admitsper10k, year, urbanicity)
+
+
+ggplot(prison_visualize,
+         aes(y = prison_admitsper10k, x = year, fill = urbanicity)) +
+  geom_bar(position = "dodge", stat = "identity") + ggtitle("Prison Admits Per 10,000 Residents by Urbanicity") + ylab("Prison Admissions Per 10,000 Residents") + xlab("Year") + scale_fill_discrete(
+    name = "Urbanicity",
+    labels = c(
+      "Metropolitan",
+      "Rural",
+      "Urban adjacent to metropolitan center",
+      "Urban not adjacent to metropolitan center"
+    )
+  )
+
+```
+
+This graphic seems to match what the article was alluding to, namely that rural counties have experience a boom in prison admissions per capita compared to urban and metropolitan areas. 
+
+Let's take a look at the counties where prison admission rates have increased the greatest since 2006. 
+
+```{r, message=FALSE, warning=FALSE}
+
+top_increase <- prison_visualize %>% filter(year == 2014) %>% arrange(desc(percent_change)) %>% select(county, state, percent_change, prison_admitsper10k, urbanicity, persistent_poverty)
+                           
+head(top_increase) %>%
+  kbl(caption = "Counties with Greatest Increase in Admissions Per Capita between 2006 and 2014") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+Further, let's take a look at the counties where prison admission rates have decreased the greatest since 2006. 
+
+```{r, message=FALSE, warning=FALSE}
+
+top_decrease <- prison_visualize %>% filter(year == 2014) %>% arrange(percent_change) %>% select(county, state, percent_change, prison_admitsper10k, urbanicity, persistent_poverty)
+                           
+                           
+head(top_decrease) %>%
+  kbl(caption = "Counties with Greatest Decrease in Admissions Per Capita between 2006 and 2014") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+There is not a clear trend in either the top increases or decreases. A few notes to explore more are that the single counties that experienced the greatest increases in admissions were metropolitan, not rural so there is some parsing out to do to figure out why rural counties overall are experiencing higher rates of prison admissions when aggregated. Next, a lot of the counties to see the highest decreases are located in California. Finally, many of the the counties in both these lists are not counties that have been historically impoverished. 
+
+
+
+Out of curiosity, I explore a little further what was happening in California. First, I graph the admissions per capital and note that it seems to be fairly uniform across the state in terms of county urbanicity and these changes are not likely to be impacting the trends seen on the United States as a whole. The graphic of prison admissions excluding California is included to show that this is true. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+prison_visualize  %>% filter(state == "CA") %>% ggplot(aes(y=prison_admitsper10k, x=year, fill=urbanicity)) + 
+    geom_bar(position="dodge", stat="identity") + ggtitle("California Prison Admits Per 10,000 Residents by Urbanicity") + ylab("Prison Admissions Per 10,000 Residents") + xlab("Year") + scale_fill_discrete(name = "Urbanicity", labels = c("Metropolitan", "Rural", "Urban adjacent to metropolitan center", "Urban not adjacent to metropolitan center" )) 
+
+```
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+prison_visualize %>% filter(state != "CA") %>% ggplot(aes(y = prison_admitsper10k, x =
+                                                            year, fill = urbanicity)) +
+  geom_bar(position = "dodge", stat = "identity") + ggtitle("Prison Admits (excluding CA) Per 10,000 Residents by Urbanicity") + ylab("Prison Admissions Per 10,000 Residents") + xlab("Year") + scale_fill_discrete(
+    name = "Urbanicity",
+    labels = c(
+      "Metropolitan",
+      "Rural",
+      "Urban adjacent to metropolitan center",
+      "Urban not adjacent to metropolitan center"
+    )
+  ) 
+
+```
+Finally, I explore an SES measure along with the county data. Presented below is the county data separated into counties that have experienced persistent poverty, a measure of 20% or more impoverished at a series of measures since 1980,  and those counties who have not. Interesting to note that the increase in prison populations in rural counties seems to be more pronounced in counties that have not experienced persistent poverty. It might be worthwhile to see if these counties are overall better off or have experience more economic turbulence that might account for changes. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+poverty_names <- as_labeller(c(`0` = "No Persistent Poverty", `1` = "Pesistent Poverty"))
+  
+  ggplot(prison_visualize, aes(y=prison_admitsper10k, x=year, fill=urbanicity)) + 
+    geom_bar(position="dodge", stat="identity") + facet_wrap(~ persistent_poverty, labeller = poverty_names) + theme(legend.position = "bottom", legend.direction = "vertical") + ggtitle("Prison Admits Per 10,000 Residents by Urbanicity and Persistent Poverty Status") + ylab("Prison Admissions Per 10,000 Residents") + xlab("Year") 
+ 
+```
+
+
+
+
+### Dataset 1: Bureau of Labor Statistics Data - Prepared by Eric Hirsch {.tabset}
+
+```{r, message=FALSE, warning=FALSE}
+
+labor_df <- as.data.frame(read.delim("https://raw.githubusercontent.com/ericonsi/CUNY_607/main/Projects/Project%202/Final.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+
+```
+
+#### Exploratory Findings and Analysis
+
+To get some insight into the information the data holds, I look first at gender across industries in 2020 by making a long data set around gender and grouping the occupations by industry. The below graphic shows which genders are dominated by one gender (such as construction or education and health services) and which are fairly even across genders (such as Leisure and Hospitality). 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+labor_df_gender <- labor_df %>% select(Year, Industry, Occupation, Female, Male) %>% pivot_longer(!c(Year, Industry, Occupation), names_to = "Gender", values_to = "Count")
+ 
+labor_gender_visualize <- labor_df_gender %>% group_by(Year, Industry) %>% filter(Year == 2020) %>% ggplot(aes(y=Count, x=Industry, fill=Gender)) + geom_bar(position="dodge", stat="identity") + coord_flip() + ggtitle("Labor Stats by Gender") + ylab("Number Employed (in thousands)") + xlab("Industry") + theme(legend.position = "bottom", legend.direction = "vertical")
+
+
+ggplotly(labor_gender_visualize)
+
+```
+
+In exploring this dataset, I also chose to look at the impact of COVID-19 across industries by looking at 2020 data as it compares to the previous two years. I chose to narrow the number of years that I looked at after initially observing that previous years were relatively steady by industry. The below graphic is not the strongest as it is a bit cluttered and many industries remain steady, but you can see a more sharp dip in the Leisure and Hospitality industry between 2019 and 2020. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+labor_df_category<- labor_df %>% filter(Year >= 2018) %>% group_by(Year, Industry) %>% summarise(Total_Cat = sum(Total)) %>% ggplot(aes(x=Year, y=Total_Cat, color=Industry)) +
+  geom_line() +
+  theme_ipsum() +
+  ggtitle("Labor Stats by Industry") + ylab("Number Employed (in thousands)") + scale_x_continuous(breaks = breaks_width(1))
+
+ggplotly(labor_df_category)
+
+```
+
+Narrowing in on the Leisure and Hospitality industry, the below graphic again is very cluttered at the bottom, but you can see from the Service (non-protective) occupation is accounting for many of the labor losses from 2019-2020, which aligns with what we might expect given the impact that the pandemic has had on the travel and dining industry. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+labor_df_leisure<- labor_df %>% filter(Industry == "Leisure and hospitality"
+                                        ) %>% group_by(Year) %>% ggplot(aes(x=Year, y=Total, color=Occupation)) +
+  geom_line() +
+  theme_ipsum() +
+  ggtitle("Labor Stats within Leisure and Hospitatlity") + ylab("Number Employed (in thousands)") + scale_x_continuous(breaks = breaks_width(1))
+
+ggplotly(labor_df_leisure)
+
+```
+
+
+
+
+### Dataset 3: Epidemic Data - Prepared by Dan Sullivan {.tabset}
+
+```{r, message=FALSE, warning=FALSE}
+
+epidemic_df <- as.data.frame(read.delim("https://raw.githubusercontent.com/TheSaltyCrab/Data607-Project2/main/a_clean_epidemic.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+```
+
+#### Exploratory Findings and Analysis
+
+For epidemic data, I explore epidemics in the past 10 years given their comparable world total population and access to modern healthcare. First, I look at numbers of deaths by event, limiting it to the top 10 most deadly. Looking at the below graphics, COVID-19 deaths far overwhelmn the graphic compared to the other epidemics of the last decade. The next most deadly epidemics, following COVID-19, were the 2017-2018 United States flu season, the Western African Ebola Virus epidemic, and the 2010 Haiti cholera outbreak. 
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+# Democratic Republic of Congo is shortned to DRC just for ease of display
+
+epidemic_df$event <- str_replace_all(epidemic_df$event, "Democratic Republic of the Congo", "DRC")
+
+epidemic_decade <- epidemic_df %>% mutate_at(vars(deaths_low_estimate), as.integer) %>% drop_na(deaths_low_estimate) %>% filter(start_year >= 2010) %>% arrange(desc(deaths_low_estimate)) %>% slice(1:10)  %>% ggplot(aes(x = reorder(event, deaths_low_estimate),  y=deaths_low_estimate)) +
+  geom_col(position="dodge", stat="identity", fill = "#FF6666") + ggtitle("Epidemics by Total Deaths") + theme_ipsum() +
+  coord_flip() +
+  xlab("Event") +
+  ylab("Number of Deaths") + scale_y_continuous(labels = comma)
+
+ggplotly(epidemic_decade, tooltip = c("event", "deaths_low_estimate"))
+```
+
+Now let's consider all years we have data for and view the top 10 epidemics of all time by number of death estimates. While COVID-19 overwhelmed the graph of the last 10 years, below you can see that it falls much lower in the grand scheme of recorded epidemics. 
+
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+epidemic_top10 <- epidemic_df %>% mutate_at(vars(deaths_low_estimate), as.integer) %>% drop_na(deaths_low_estimate) %>%  arrange(desc(deaths_low_estimate)) %>% slice(1:10) %>% ggplot(aes(x = reorder(event, deaths_low_estimate),  y=deaths_low_estimate)) +
+  geom_col(position="dodge", stat="identity", fill = "#FF6666") + ggtitle("Top 10 Epidemics by Total Deaths") + theme_ipsum() +
+  coord_flip() +
+  xlab("Event") +
+  ylab("Number of Deaths") + scale_y_continuous(labels = comma)
+
+ggplotly(epidemic_top10, tooltip = c("event", "deaths_low_estimate"))
+
+```
+
+
+### Conclusions 
+
+This project was a great exercise in cleaning and visualizing very different datasets and exploring how others approach the process. We were able to walk each other through step by step our process and I think learned a good deal from that process. Also coming in to someone else's cleaned dataset to analyze is a new skill set since you have to spend some time familiarizing yourself with the other person's code and learning the variables. 
+
