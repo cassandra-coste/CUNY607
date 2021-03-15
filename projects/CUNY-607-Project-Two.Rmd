@@ -250,7 +250,7 @@ head(prison_data_final) %>%
 
 #### Exploratory Findings and Analysis
 
-In order, to anlyza this dataset, we'll first look to see if our merged data observes the same trend as The Upshot article. Counties where admission data was not able to be obtained or was not able to be confirmed by The Upshot are being dropped from this analysis and we are assuming that there is noting systematically different about counties where admissions data is not being reported and those counties where it is. 
+In order, to anlyza this dataset, we'll first look to see if our merged data observes the same trend as The Upshot article. Counties where admission data was not able to be obtained or was not able to be confirmed by The Upshot are being dropped from this analysis and we are assuming that there is nothing systematically different about counties where admissions data is not being reported and those counties where it is. 
 
 ```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
 
