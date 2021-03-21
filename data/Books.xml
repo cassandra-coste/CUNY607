@@ -1,38 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <books>
-<book>
-    <title>Polio: An American Story</title>
-    <authors><author>David Oshinsky</author></authors>
-  <genre>Non-fiction</genre>
-  <ISBN>978-0195307146</ISBN>
-  <year>2005</year>
-  <pages>342</pages>
-</book>
-<book>
-  <title>The Argonauts</title>
-  <authors><author>Maggie Nelson</author></authors>
-  <genre>Autobiography</genre>
-  <ISBN>978-1555977351</ISBN>
-  <year>2016</year>
-  <pages>160</pages>
-</book>
-<book>
-  <title>Health Justice Now: Single Payer and What Comes Next</title>
-  <authors><author>Timothy Faust</author></authors>
-  <genre>Non-fiction</genre>
-  <ISBN>978-1612197166</ISBN>
-  <year>2019</year>
-  <pages>272</pages>
-</book><book>
-    <title>Bodies and Barriers: Queer Activists on Health</title>
-    <authors><author>Adrian Shanker</author><author>Kate Kendell</author></authors>
- <genre>Non-fiction</genre>
-  <ISBN>978-1629637846</ISBN>
-  <year>2020</year>
-  <pages>240</pages>
-</book>
+    <book>
+        <title>Polio: An American Story</title>
+        <authors>
+            <author>David Oshinsky</author>
+        </authors>
+        <genre>Non-fiction</genre>
+        <ISBN>978-0195307146</ISBN>
+        <year>2005</year>
+        <pages>342</pages>
+    </book>
+    <book>
+        <title>The Argonauts</title>
+        <authors>
+            <author>Maggie Nelson</author>
+        </authors>
+        <genre>Autobiography</genre>
+        <ISBN>978-1555977351</ISBN>
+        <year>2016</year>
+        <pages>160</pages>
+    </book>
+    <book>
+        <title>Health Justice Now: Single Payer and What Comes Next</title>
+        <authors>
+            <author>Timothy Faust</author>
+        </authors>
+        <genre>Non-fiction</genre>
+        <ISBN>978-1612197166</ISBN>
+        <year>2019</year>
+        <pages>272</pages>
+    </book>
+    <book>
+        <title>Bodies and Barriers: Queer Activists on Health</title>
+        <authors>
+            <author>Adrian Shanker</author>
+            <author>Kate Kendell</author>
+        </authors>
+        <genre>Non-fiction</genre>
+        <ISBN>978-1629637846</ISBN>
+        <year>2020</year>
+        <pages>240</pages>
+    </book>
 </books>
-
-
-
-
