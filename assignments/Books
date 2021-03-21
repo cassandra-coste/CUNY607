@@ -1,0 +1,30 @@
+[{
+	"title": "Polio: An American Story",
+	"authors": "Foster Provost",
+	"genre": "Non-fiction"
+	"ISBN": "978-0195307146",
+	"year": "2005"
+	"pages": "342"
+}, {
+	"title": "The Argonauts",
+	"authors": "Maggie Nelson",
+	"genre": "Autobiography"
+	"ISBN": "978-1555977351",
+	"year": "2016"
+	"pages": "160"
+}, {
+	"title": "Health Justice Now: Single Payer and What Comes Next",
+	"authors": "Timothy Faust",
+	"genre": "Non-fiction"
+	"ISBN": "978-1612197166",
+	"year": "2019"
+	"pages": "272"
+}, {
+	"title": "Bodies and Barriers: Queer Activists on Health",
+	"authors": ["Adrian Shanker",
+	"Kate Kendell"],
+	"genre": "Non-fiction"
+	"ISBN": "978-1629637846",
+	"year": "2020"
+	"pages": "240"
+}]
