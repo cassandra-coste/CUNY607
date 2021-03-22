@@ -1,0 +1,85 @@
+---
+title: "Assignment 7"
+author: "Cassandra Coste"
+date: "3/21/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+The purpose of this assignment is to practice loading HTML, XML, and JSON files into R. I created each of the files in Sublime Text, saved them in three formats, and uploaded them to Github. From there, each file is loaded into R and converted into a dataframe. The three dataframes will then be compared at the end. 
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(RCurl)
+library(XML)
+library(jsonlite)
+library(httr)
+
+```
+
+### Load tables
+
+HTML
+
+```{r HTML, message=FALSE, warning=FALSE}
+
+HTMLURL <- "https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/data/Books.html"
+HTMLdata <- GET(HTMLURL)
+HTMLdata <- htmlParse(HTMLdata)
+HTMLdata <- readHTMLTable(HTMLdata, stringsAsFactors = F)
+HTMLdata  <- HTMLdata 
+BooksHTML_df <- as.data.frame(HTMLdata)
+
+```
+
+XML
+
+```{r XML, message=FALSE, warning=FALSE}
+
+XMLurl <- "https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/data/Books.xml" 
+XMLdata <- GET(XMLurl)
+XMLdata <- xmlTreeParse(XMLdata,useInternal = TRUE)
+BooksXML_df <- xmlToDataFrame(XMLdata) 
+
+```
+
+JSON
+
+```{r JSON, message=FALSE, warning=FALSE}
+
+JSONurl <- "https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/data/books" 
+JSONdata <- fromJSON(JSONurl)
+BooksJSON_df <- as.data.frame(JSONdata)
+
+
+
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+
+str(BooksHTML_df)
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+
+str(BooksXML_df)
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+
+str(BooksJSON_df)
+```
+
+### Conclusion 
+
+In conclusion, the dataframes all looked relatively similar though the import process looked a bit different for each. RCurl needed to be used for the HTML and XML files, but the JSON file could be imported directly via the fromJSON function. Probably the biggest difference I see in the dataframes is that for the authors column, the HTML and XML are character columns, but in the JSON, it is a list. There are also minor differences in the author strings of the HTML and XML to do with the handling of the double author. Each of the file types loaded a bit differently and required some tidying, such as the aforementioned authors, and column attributes being converted to numeric. 
+
+
