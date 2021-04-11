@@ -1,0 +1,97 @@
+---
+title: "CUNY 607 Assignment 09"
+author: "Cassandra Coste"
+date: "4/10/2021"
+output:
+   html_document:
+    theme: journal
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Introduction
+
+The purpose of this assignment is to practice using the NYT's APIs to read data into R and convert to a dataframe. 
+
+### Load libraries
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(reactable)
+library(jsonlite)
+
+```
+
+### Use NYT API to retrieve movie reviews
+
+For my first attempt to use the API I chose to use the Movie Reviews API to pull the reviews for all the Star Wars movies.
+
+
+```{r, warning=FALSE, message=FALSE}
+
+# Use NYT API to read in movie reviews for films including star and wars in the names and convert to data frame
+
+nyt_df  <- fromJSON("https://api.nytimes.com/svc/movies/v2/reviews/search.json?query=star+wars&api-key=kMkdHuZBfdpAX7M5j2BUG5oGIP7CmafN", flatten = TRUE) %>% data.frame()
+
+# select columns of interest and clean up column names
+
+nyt_starwars <- nyt_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date)
+
+
+```
+
+### Verify that object is dataframe
+
+Now that I have pulled the data and converted it to a data frame, I perform a check that the conversion from JSON to a data frame was successful. 
+
+```{r, warning=FALSE, message=FALSE}
+
+# check that object we've created is a dataframe 
+
+is.data.frame(nyt_df)
+
+```
+
+
+### View data frame
+
+Finally, we view the cleaned data frame. 
+
+```{r, warning=FALSE, message=FALSE}
+nyt_starwars %>% reactable(bordered = TRUE, striped = TRUE, highlight = TRUE) 
+```
+
+
+### Add additional criteria
+
+Let's say that we only want to view the Star Wars movies that were critic's picks. For this small list, it would be easy enough to eye ball which movies we should watch, but below I practice adding an additional criteria to my API pull to limit my list to only critic picks.
+
+```{r, warning=FALSE, message=FALSE}
+
+# Use NYT API to read in movie reviews for films including star and wars in the names and are also critic's picks convert to data frame
+
+critic_df <- fromJSON("https://api.nytimes.com/svc/movies/v2/reviews/search.json?critics-pick=Y&query=star+wars&api-key=kMkdHuZBfdpAX7M5j2BUG5oGIP7CmafN", flatten = TRUE) %>% data.frame()
+
+# select columns of interest and clean up column names
+
+nyt_starwars_critic <- critic_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date)
+
+```
+
+### View data frame
+
+Here we see that if we have limited time, the best of Star Wars films according to the NYT are the three presented below. 
+
+```{r, warning=FALSE, message=FALSE}
+nyt_starwars_critic %>% reactable(bordered = TRUE, striped = TRUE, highlight = TRUE) 
+```
+
+
+### Conclusion
+
+The NYT API and supporting documentation is easy to use and can be utilized to pull data for your needs. 
+
+
