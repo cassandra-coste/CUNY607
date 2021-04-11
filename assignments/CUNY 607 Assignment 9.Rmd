@@ -36,9 +36,10 @@ For my first attempt to use the API I chose to use the Movie Reviews API to pull
 
 nyt_df  <- fromJSON("https://api.nytimes.com/svc/movies/v2/reviews/search.json?query=star+wars&api-key=kMkdHuZBfdpAX7M5j2BUG5oGIP7CmafN", flatten = TRUE) %>% data.frame()
 
-# select columns of interest and clean up column names
+# select columns of interest and clean up column names and covert inconsistent case byline column to lowercase
 
-nyt_starwars <- nyt_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date)
+nyt_starwars <- nyt_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date) %>% mutate(byline = tolower(byline))
+
 
 
 ```
@@ -75,9 +76,10 @@ Let's say that we only want to view the Star Wars movies that were critic's pick
 
 critic_df <- fromJSON("https://api.nytimes.com/svc/movies/v2/reviews/search.json?critics-pick=Y&query=star+wars&api-key=kMkdHuZBfdpAX7M5j2BUG5oGIP7CmafN", flatten = TRUE) %>% data.frame()
 
-# select columns of interest and clean up column names
+# select columns of interest and clean up column names and covert inconsistent case byline column to lowercase
 
-nyt_starwars_critic <- critic_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date)
+nyt_starwars_critic <- critic_df %>% select(results.display_title, results.mpaa_rating, results.critics_pick, results.byline, results.headline, results.publication_date, results.opening_date) %>% rename(title = results.display_title, rating = results.mpaa_rating, critics_pick = results.critics_pick, byline = results.byline, headline = results.headline, pub_date = results.publication_date, open_date = results.opening_date) %>% mutate(byline = tolower(byline))
+
 
 ```
 
