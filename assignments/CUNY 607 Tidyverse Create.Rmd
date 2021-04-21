@@ -37,7 +37,7 @@ library(purrr)
 
 ```
 
-Next we load the csv file format data that will be used for our examples. 
+Next we load the csv file format data that will be used for our examples. This data was obtained from Kaggle and is originally sourced from The World Happiness Report published by the Sustainable Development Solutions Network. This version of the data can be found here: https://www.kaggle.com/ajaypalsinghlo/world-happiness-report-2021?select=world-happiness-report.csv
 
 ```{r load data}
 
@@ -118,7 +118,7 @@ by_country_model <- by_country %>% mutate(model = map(data, ~ lm(Healthy.life.ex
 
 ### Tidy models using tidy and unnest functions
 
-To take this one step farther we can tidy our model column which contains lists, we use map again to and the tidy function to turn those lists into nested dataframes in a new column called tidy and finally use unnest on our tidied column so that we now can easily see the coefficients for the model run for each country 
+To take this one step farther we can tidy our model column which contains lists. We use map again to achieve this and the tidy function to turn those lists into nested dataframes in a new column called tidied and finally use unnest on our tidied column so that we now can easily see the coefficients for the model run for each country 
 
 ```{r}
 
