@@ -1,0 +1,61 @@
+---
+title: "Recommender System Discussion"
+author: "Cassandra Coste"
+date: "4/21/2021"
+output: 
+  html_document:
+    pandoc_args: ["--extract-media", "."]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Recommender Systems - An Analysis of Tinder - https://tinder.com/
+
+For this assignment I looked at Tinder, an online dating platform. 
+
+### Scenario analysis:
+
+**The target users**: Any single/looking to date adult (though has a reputation of being most popular with millennials. 
+
+**Key users goals**: Connect to new/unfamiliar people with the potential for romantic relationships. Introduce new way of approaching potential romantic partners with the concept that prior to approaching you will know if that person wants to be approached. Personalized recommendations leading to more relevant profiles being viewed and improving number of matches and messages.
+
+**How Tinder is meeting goals**: Can view a series of potential matches based on basic criteria put in (desired distance, age, and gender) and when a user “matches” they are then able to communicate. Creation of TinVec, their own personalized recommendation approach. 
+
+### Recommendation system - Tinder
+
+Tinders uses several approaches to their recommendation system including their own TinVec detailed below. 
+
+**ELO Rating System**
+
+Historically, tinder used an ELO rating to assess the desirability of a user as a part of the recommendation system.  The number of people who swiped right (an indication that they were open to being matched) a person’s profile, the higher their score went up. People would then be shown people with comparable desirability scores. Today, they have moved away from ELO ratings, but worth mentioning that this was a part of their original concept. 
+
+**Collaborative Filtering**
+
+The assumption that others like you will have similar preferences on matches and will guide the profiles shown to you to swipe right and left on. 
+
+**Content-based Filtering**
+
+Unlike other dating sites that allow users to fill in detailed preferences, answer numerous questions, and have complex bio templates, tinder online has a free-form bio section, but they do utilize natural language processing on the bios of Tinder profiles in conjunction with content-based filtering techniques.  
+
+**TinVec**
+
+TinVec is Tinder's personalized recommendation approach. TinVec "embeds users’ preferences into vectors leveraging on the large amount of swipes by Tinder users".^[Data source: Liu, Steven. “MLconf.” Personalized User Recommendations at Tinder, 2017, mlconf.com/sessions/personalized-user-recommendations-at-tinder-the-t/. ]  
+
+Unlike a platform trying to recommend a product such as Amazon or Netflix, Tinder must attempt to consider two-way recommendations where the person being recommended to you would also be as open to choosing you as you are to them. 
+
+TinVec uses your swipe information and a neural-network-based approach. 
+
+When a swiper swipes right on a swipee, the swipee is mapped to a to vector in an embedding space. The embedded vector represents characteristics. 
+
+Similar users are closer in the embedded space so the closer they are the more likely they are to share common characteristics which is utilized to identify more users that you may swipe right on.
+
+Below is a slide from Tinder's science team explaining how TinVec utilizes swipe data. 
+
+![Table explaining that VinTec uses embedded vectors to cluster users for future recommendations](https://github.com/cassandra-coste/CUNY607/blob/main/images/TinVec_Page_08.png?raw=true)
+
+
+### Recommendations to improve the site/app
+
+The primary area of improvement that I see in Tinder's approach is that they have done a lot to increase swipe matches, but the piece of their objective that is harder to reach is increased messages or meet-ups. If the goal of the dating app is to encourage dating, it must be more than increasing the amount of times your swipe right. They do things to reduce the gamification of the platform through things like limiting the number of swipes per day. Tinder excels in engagement, but may need to improve their model to meet their goal of connecting people beyond swipes. 
