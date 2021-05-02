@@ -9,22 +9,180 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+### Introduction
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+The purpose of this project is to practice using document classification models to predict the class of document and further to practicy using the textrecipes and tidymodels packages. 
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+For this project, I will be utilizing the SMS Spam Collection Data Set, a public set of SMS labeled messages that have been collected for mobile phone spam research and originally sourced from: https://archive.ics.uci.edu/ml/datasets/sms+spam+collection
+
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(textrecipes)
+library(tidymodels)
+library(themis)
+library(ranger)
+
 ```
 
-## Including Plots
+### Load data
 
-You can also embed plots, for example:
+Read in file to clean
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+
+text_data <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/data/SMSSpamCollection", header = FALSE, stringsAsFactors = FALSE, quote=NULL, sep = "\t"))
+
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Add column headers
+
+```{r}
+
+text_data %<>% rename(classification = V1, text = V2)
+
+text_data$classification <- as_factor(text_data$classification)
+
+```
+
+Here we check to see how many ham and how many spam observations that we have. As you can see, it is very unbalanced so we will likely upsample or downsample when we model the data. 
+
+```{r}
+
+text_data %>%
+  ggplot(aes(classification)) +
+  geom_bar(fill = "#56B4E9") +
+  theme_minimal() +
+  labs(x = NULL,
+       y = "Count",
+       title = "Classification Counts for Spam/Ham Dataset")
+
+```
+
+I utilized two resources to complete this project. The first is a "Text Classification with Tidymodels" tutorial by Emil Hvitfeldt (https://www.hvitfeldt.me/blog/text-classification-with-tidymodels/). The second was the "Get started with tidymodels and classification of penguin data" YouTube tutorial by Julia Silge https://www.youtube.com/watch?v=z57i2GVcdww.
+
+### Prepaing the data for modeling
+
+First, we will split our data into testing and training data so that once we develop our model, we can test it. This is done using the rsample package from tidymodels.
+
+```{r}
+
+set.seed(689) 
+
+text_split <- initial_split(text_data, strata = "classification", p = 0.75)
+train_data <- training(text_split)
+test_data <- testing(text_split)
+
+```
+
+Next, we will prepare the data by performing preprocessing including, downsampling the data for the classification categories that are over-represented (ham), removing stopwords, utilize stem word processing, tokenizing by word, etc. using the recipe function. 
+
+
+```{r}
+
+text_recipe <- recipe(classification ~ ., data = train_data) %>%
+  themis::step_downsample(classification, under_ratio = 1) %>% step_tokenize(text) %>%
+  step_stem(text) %>%
+  step_tokenfilter(text, min_times = 10) %>%
+  step_tfidf(text) %>% prep(training = train_data)
+
+ready_train <- juice(text_recipe)
+ready_test <- bake(text_recipe, test_data)
+``` 
+
+### Defining our models
+
+I decided to compare two models, a logistic regression model and a random forest classifier model. For full transparency, I know far more about the logistic regression and would not know if I am violating any assumptions for the random forest model, but I thought it was good practice to try multiple models.   
+
+
+First, we define the specifications for the models and will be using the parsnip package from tidymodels.
+
+```{r}
+
+glmnet_spec <- logistic_reg(mixture = 0, penalty = 0.1) %>%
+  set_engine("glmnet")
+
+rf_spec <- rand_forest() %>% set_mode("classification") %>% set_engine("ranger")
+
+```
+
+Now we can run the model on the training data. 
+
+```{r}
+
+
+test_model_glmnet <- glmnet_spec %>%
+  fit(classification ~ ., data = ready_train)
+
+test_model_rf <- rf_spec %>%
+  fit(classification ~ ., data = ready_train)
+
+
+```
+
+### Evaluating the models 
+
+Set up evaluation tibbles using the parsnip function that is part of the yardstick package so that we can evaluate the performance of the models
+
+```{r}
+
+eval_tibble_glmnet <- test_data %>%
+  select(classification) %>%
+  mutate(
+    class_model_glmnet = parsnip:::predict_class(test_model_glmnet, ready_test),
+    prop_model_glmnet  = parsnip:::predict_classprob(test_model_glmnet, ready_test) %>% pull(`spam`))
+
+eval_tibble_rf <- test_data %>%
+  select(classification) %>%
+  mutate(
+    class_model_rf = parsnip:::predict_class(test_model_rf, ready_test),
+    prop_model_rf  = parsnip:::predict_classprob(test_model_rf, ready_test) %>% pull(`spam`))
+
+```
+
+I will use two approaches to looking at the evaluation metrics for the models.
+
+First, evaluate the logistic regression model looking at accuracy, precision, recall. 
+
+```{r}
+accuracy_glmnet <- accuracy(eval_tibble_glmnet, truth = classification, estimate = class_model_glmnet)
+precision_glmnet <- precision(eval_tibble_glmnet, truth = classification, estimate = class_model_glmnet)
+recall_glmnet <- recall(eval_tibble_glmnet, truth = classification, estimate = class_model_glmnet)
+
+accuracy_glmnet
+precision_glmnet
+recall_glmnet
+```
+
+
+Second, using a confusion matrix, a cross-tabulation of reference and predicted classes, to evaluate the model and using the summary function to look at accuracy, specificity, etc. 
+
+```{r}
+
+conf_matrix_glmnet <- conf_mat(eval_tibble_glmnet, truth = classification, estimate = class_model_glmnet, dnn = c("Predicted", "Reference"))
+
+conf_matrix_glmnet 
+summary(conf_matrix_glmnet)
+```
+
+
+I prefer the second method for looking at the model performance so I will run the confusion matrix and summary for random forest below. 
+
+
+```{r}
+conf_matrix_rf <- conf_mat(eval_tibble_rf, truth = classification, estimate = class_model_rf, dnn = c("Predicted", "Reference"))
+
+conf_matrix_rf 
+summary(conf_matrix_rf)
+```
+
+
+### Conclusion 
+
+This analysis shows that the random forest classification model is better at predicting spam text messages than the logistic regression model. 
+
+This project covers setting up recipes and modeling which could be powerful if you were running multiple datasets through the same process. Not explored in the project is that you can also create workflows to run multiple models. The tidymodels and textrecipes packages are efficient and can be scaled up to much larger projects. 
