@@ -1,0 +1,471 @@
+---
+title: "..."
+author: ""
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{css style settings, echo = FALSE}
+blockquote {
+    padding: 10px 20px;
+    margin: 0 0 20px;
+    font-size: 14px;
+    border-left: 5px solid #eee;
+}
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### *Exploring Network Analysis with Vaccine Adverse Event Reporting for COVID-19*
+
+In this project I explore the United State's Vaccine Adverse Event Reporting System and seek to discover if their are symptoms that are more common in different manufacturers of the COVID-19 vaccine. 
+
+
+************************************************************
+## {.tabset .tabset-pills}
+
+### Research Question 
+
+Background and significance: 
+
+* Vaccine Adverse Event Reporting System (VAERS), maintained by the CDC and FDA, is a “national vaccine safety surveillance program that helps to detect unusual or unexpected reporting patterns of adverse events for vaccines”. ^(“VAERS.” Vaccine Safety Monitoring, Centers for Disease Control and Prevention, 8 Apr. 2021, www.cdc.gov/vaccinesafety/ensuringsafety/monitoring/vaers/)
+
+* VAERS was established in the 1990s and you can download public datasets here: https://wonder.cdc.gov/vaers.html
+* Adverse events can be self-reported or reported by a physician
+* VAERS is a system where things such as the pattern of blood clots following the Johnson & Johnson (Janssen) vaccine would be caught
+
+Specific Aims: 
+
+* Provide summary statistics of vaccinations by distributor and dose
+* Perform text analysis on the symptom text column which allows for a free form description of symptoms following a vaccination 
+* Explore network analysis as a way of detecting patterns in vaccine adverse reaction reporting 
+
+### Packages
+
+```{r load libraries and data, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+library(magrittr)
+library(igraph)
+library(skimr)
+library(readr)
+library(tidyverse)
+library(stringi)
+library(tm)
+library(corpus)
+library(wordcloud)
+library(data.table)
+library(DBI)
+library(RMySQL)
+library(ggraph)
+library(tidygraph)
+library(visNetwork)
+library(keyring)
+
+
+```
+
+### Methology 
+
+#### {.tabset}
+
+##### 1.Collect and Store Data
+
+The 2020 and 2021 data was retrieved from https://wonder.cdc.gov/vaers.html and compiled and stored in MySQL. 
+
+To analyze the data in RStudio, RStudio is connected to MySQL and tables are read into RStudio. 
+
+The MySQL connection code is below, but for reproducibility purposes, I am providing the CSV files downloaded from MySQL. 
+
+
+> con <- dbConnect(
+  odbc::odbc(),
+  .connection_string = "Driver={MySQL ODBC 8.0 Unicode Driver};",
+  Server = "127.0.0.1",
+  Database = "vaers",
+  UID = "root",
+  PWD = psswd,
+  Port = 3306
+)
+
+>vaccine <- dbFetch(dbSendQuery(con,
+                                    "SELECT * FROM vaccine"))
+
+>data <- dbFetch(dbSendQuery(con,
+                                    "SELECT * FROM data"))
+
+>symptoms <- dbFetch(dbSendQuery(con,
+                                    "SELECT * FROM symptoms"))
+
+
+
+```{r}
+data <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/projects/vaers.data.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+symptoms <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/projects/vaers.symptoms.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+
+vaccine <- as.data.frame(read.delim("https://raw.githubusercontent.com/cassandra-coste/CUNY607/main/projects/vaers.vaccine.csv", header = TRUE, stringsAsFactors = FALSE, sep = ","))
+
+```
+
+This left join serves to combine data about the individual entry to the vaccine information. This larger data set will be used mostly for desciptive information on our sample. 
+
+```{r}
+vaers_df <- left_join(data, vaccine, by = "vaers_id")
+```
+
+Symptoms are collected into one column based on the fact that there are some up to five symptoms reported per entry but some ids have more than one entry because they exceed five symptoms. The outcome is a list of all reported symptoms associated with a unique id that will tie it to what vaccine manufacturer the person received. 
+
+```{r}
+symptoms %<>% select(-id)
+
+symptoms_new <- symptoms %>% mutate(rn = rowid(vaers_id)) %>%
+  pivot_longer(cols = symptom1:symptom5) %>% 
+  unite(name, name, rn, sep=".") %>%
+  pivot_wider(names_from = name, values_from = value)
+
+symptoms_final <- symptoms_new %>% pivot_longer(
+  cols = -c("vaers_id"),
+  names_to = "symptoms_type",
+  values_to = "symptoms") %>% na_if("") %>% drop_na(symptoms) %>% select(-symptoms_type)
+
+```
+
+##### 2.Explore the Data
+
+This data covers adverse event reports over 2020 and 2021. As would be expected with such a large vaccination effort, COVID-19 VAERS reports far exceed reporting for any other vaccine over the past two years. 
+
+```{r, fig.width=8,fig.height=12, message=FALSE, warning=FALSE}
+
+vaers_df %>%
+  ggplot(aes(vax_type)) +
+  geom_bar(fill = "#56B4E9") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = NULL,
+       y = "Count",
+       title = "COVID-19 Vaccine Adverse Events in 2020-2021 Outpaces other Vaccines")
+
+```
+
+
+
+For this analysis, I will be focusing on COVID-19 vaccinations in particular and will filter the data for just those reports. I am also removing reports where the manufacturer of the vaccine is unknown since it is a key variable of interest. 
+
+```{r}
+vaers_covid <- vaers_df %>% select(vaers_id, vax_type, vax_manu, vax_dose, symptom_text) %>% filter(vax_type == "COVID19") %>% select(-vax_type) %>% filter(vax_manu != "UNKNOWN MANUFACTURER")
+
+```
+
+Here we can see the distribution of adverse events by vaccine manufacturer. The smaller number of Janssen is likely due to its later roll out and the fact it requires a single dose. 
+
+```{r, fig.width=8,fig.height=6, message=FALSE, warning=FALSE}
+vaers_covid %>%
+  ggplot(aes(vax_manu)) +
+  geom_bar(fill = "#56B4E9") +
+  coord_flip() +
+  theme_minimal() +
+  labs(x = NULL,
+       y = "Count",
+       title = "Number of Adverse Events Reported by Vaccine Manufacturer")
+```
+
+Finally, I looked to see if there was a difference in reports by whether it was the first or second dose.  I first exclude Janssen since there is only a single dose. 
+```{r}
+
+dose_covid <- vaers_covid %>% filter(vax_manu != "JANSSEN") %>% filter(vax_dose == 1 | vax_dose == 2)
+
+```
+
+This graph shows that a higher percentage of reports for each manufacturer is for the first dose, and that is slightly more true for Moderna than Pfizer.
+
+```{r, fig.width=8,fig.height=6, message=FALSE, warning=FALSE}
+
+dose_covid$vax_dose <- as_factor(dose_covid$vax_dose)
+
+dose_visualize <-
+  dose_covid %>% group_by(vax_manu, vax_dose) %>% summarize(count = n()) %>% mutate(total = colSums(across(where(is.numeric)))) %>% mutate(percent_reported = count/total * 100)
+
+
+ggplot(dose_visualize, aes(fill = vax_dose, x = vax_manu, y = percent_reported)) + geom_bar(position = "dodge", stat="identity") + coord_flip() + ggtitle("First Dose Makes up Higher Percentage of VAERS Reports for Each Manufacturer") + ylab("Percentage of Reports") + xlab("Manufacturer") + scale_fill_discrete(name = "Dose Sequence", labels = c("First", "Second"))
+
+```
+
+
+##### 3.Text Analysis
+
+I was interested in the free form symptom column to see what we might be able to gain from its analysis over the single symptom columns. You can see here both a word cloud and ngram representation of that analysis. 
+
+Neither are especially revealing, perhaps you get some time context to how the symptoms emerged, but overall I don’t think that either of these approaches would be helpful at this stage. I think once patterns of symptoms are identified, investigators being able to use the VAERS ID to track down this more nuanced account of the report would be a better use of the data.
+
+```{r}
+text <- vaers_covid %>% select(symptom_text)
+  
+corpus <- VCorpus(VectorSource(text))
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+corpus <- tm_map(corpus, removeWords, c("vaccine","patient","patients","covid","received","reported"))
+```
+  
+``````{r, fig.width=8,fig.height=8, message=FALSE, warning=FALSE}
+
+wordcloud(corpus, max.words = 50, colors = colorRampPalette(brewer.pal(7, "Blues"))(32))
+
+```
+
+
+```{r}
+#Unigrams
+
+unigramTokenizer <- function(x) { unlist(lapply(ngrams(words(x), 1), paste, collapse = " "), use.names = FALSE) }
+unigram <- TermDocumentMatrix(corpus, control = list(wordLengths = c(1, 20)))
+
+
+#Bigrams
+bigramTokenizer <- function(x) { unlist(lapply(ngrams(words(x), 2), paste, collapse = " "), use.names = FALSE) }
+bigram <- TermDocumentMatrix(corpus, control = list(wordLengths = c(3, 40),tokenize = bigramTokenizer))
+
+
+```
+
+Plot Unigrams 
+
+```{r}
+
+unigramrow <- sort(slam::row_sums(unigram), decreasing=T)
+unigramfreq <- data.table(tok = names(unigramrow), freq = unigramrow)
+
+ggplot(unigramfreq[1:25,], aes(x = reorder(tok,freq), y = freq)) + coord_flip() +
+     geom_bar(stat = "identity", fill = "coral") + theme_bw() +
+     ggtitle("Top 25 Unigrams") +labs(x = "", y = "")
+
+```
+
+
+Plot bigram
+
+```{r}
+
+#Bigrams
+
+bigramrow <- sort(slam::row_sums(bigram), decreasing=T)
+bigramfreq <- data.table(tok = names(bigramrow), freq = bigramrow)
+
+ggplot(bigramfreq[1:25,], aes(x = reorder(tok,freq), y = freq)) + coord_flip() +
+     geom_bar(stat = "identity", fill = "coral") + theme_bw() +
+     ggtitle("Top 25 Bigrams") +labs(x = "", y = "")
+
+```
+
+
+##### 3.Network Analysis
+
+
+The bulk of my work on this project came in conceptualizing and organizing the graph database. 
+ 
+I used a graph database because there’s a strong emphasis on the relationships between data. The primary components of a graph database are nodes and edges with edges representing the relationships between the nodes. Both nodes and edges can have attributes.
+
+To begin building me graph database, symptoms are collected into one column based on the fact that there are some up to five symptoms reported per entry but some ids have more than one entry because they exceed five symptoms. The outcome is a list of all reported symptoms associated with a unique id that will tie it to what vaccine manufacturer the person received. 
+
+```{r}
+#symptoms %<>% select(-id)
+
+symptoms_new <- symptoms %>% mutate(rn = rowid(vaers_id)) %>%
+  pivot_longer(cols = symptom1:symptom5) %>% 
+  unite(name, name, rn, sep=".") %>%
+  pivot_wider(names_from = name, values_from = value)
+
+symptoms_final <- symptoms_new %>% pivot_longer(
+  cols = -c("vaers_id"),
+  names_to = "symptoms_type",
+  values_to = "symptoms") %>% na_if("") %>% drop_na(symptoms) %>% select(-symptoms_type)
+
+```
+
+
+
+In order to give some weight to these relationships and also account for the fact that there are different total numbers of vaccine adverse reaction reports by manufacturer, we will calculate a proportional reporting ratio (PRR). This formula was adapted from the PRR the paper "Identification of sex-associated network patterns in Vaccine-Adverse Event Association Network in VAERS". ^Zhang, Yuji, et al. "Identification of sex-associated network patterns in Vaccine-Adverse Event Association Network in VAERS." Journal of biomedical semantics 6.1 (2015): 1-8.
+
+This paper also looked at the VAERS database but made comparisons across vaccines of all different types rather than manufacturers within a single vaccine type. 
+
+
+The first step is to establish a final symptoms list by dropping na values and keeping unique entries only. 
+
+In addition we will begin constructing our node dataframe. The nodes in this network analysis will be the manufacturers and the symptoms. To differentiate between the node types, a type column will be generated. 
+
+```{r}
+
+
+
+symptoms_node <- symptoms_final %>% select(symptoms) %>% distinct(symptoms) %>% rename(node = symptoms) 
+
+vaccine_node <- vaers_covid %>% select(vax_manu) %>% distinct(vax_manu) %>% filter(vax_manu != "UNKNOWN MANUFACTURER") %>% rename(node = vax_manu)
+
+vaccine_node$type <- paste("manufacturer")
+
+```
+
+We join the symptoms to their vaccine manufacturer by id so that we know the links that will be used in our network analysis.
+
+```{r}
+covid_symptoms <- full_join(vaers_covid, symptoms_final, by = "vaers_id") %>% drop_na(vax_manu, symptoms)
+
+links <- covid_symptoms %>% select(-vaers_id) 
+
+
+```
+
+In order to assign some weight to these symptom and manufacturer relationships, I could not use a straight count since the larger number of reports for certain symptom/manufacturer relationships is due to there just being more doses of that manufacturer given. In order to account for this, I used the aforementioned  adapted proportional reporting ratio formula.
+
+In order to calculate the final ratio, four computations were needed. 
+
+* A vaccine summary (all reports for a specific manufacturer)
+* A symptom summary (all reports for a specific symptom)
+* A COVID-19 summary (all VAERS reports for COVID-19)
+* A count (a specific count of symptoms reported by manufacturer)
+
+
+
+```{r}
+prr_data <- covid_symptoms %>% group_by(vax_manu, symptoms) %>% summarize(count=n())
+
+vaccine_summary <- covid_symptoms %>% group_by(vax_manu) %>% summarize(count=n())
+
+symptom_summary <- covid_symptoms %>% group_by(symptoms) %>% summarize(count=n()) %>% drop_na()
+
+covid_summary <-  covid_symptoms %>% summarize(count=n())
+
+prr_data$covid_sum <- paste("393648")
+  
+  prr_data$vaccine_sum <-
+  ifelse(
+    prr_data$vax_manu == "JANSSEN",
+    '53599',
+    ifelse(
+      prr_data$vax_manu == "MODERNA",
+      '170707', '169342'))
+  
+prr_data <- merge(prr_data, symptom_summary, by.x="symptoms", by.y="symptoms", all.x = T)
+
+prr_data %<>% rename(count = count.x, symptom_sum = count.y)
+
+prr_data$covid_sum <- as.numeric(prr_data$covid_sum)
+prr_data$vaccine_sum <- as.numeric(prr_data$vaccine_sum)
+```
+
+Now that all the components are in the prr dataframe, I calculated the ratios to get final proportional reporting ratio values. A PRR greater than 1 indicates a symptom is more commonly reported with that manufacturer.
+
+```{r}
+prr_data %<>% ungroup() %>% mutate(manu_ratio = count / vaccine_sum)
+
+prr_data %<>% mutate(symptom_ratio = symptom_sum / covid_sum)
+
+prr_data %<>% mutate(prr = manu_ratio / symptom_ratio)
+```
+
+In order to start to analyze this very large network, I am looking at the top 15 reported symptoms per manufacturer to see if the top symptoms are consistent across the board and are these symptoms with higher proportional reporting ratios. 
+
+The below code will give us dataframes for each manufacturer and the top 15 symptoms from each and then bind the top 45 back together. As done with the manufacturer nodes,  a type column will be generated. 
+
+```{r}
+janssen <- prr_data %>%  filter(vax_manu == "JANSSEN") 
+moderna <- prr_data %>% filter(vax_manu == "MODERNA") 
+pfizer <- prr_data %>% filter(!(vax_manu == "JANSSEN")) %>% filter(!(vax_manu == "MODERNA"))
+
+top_janssen <- janssen %>% arrange(desc(count)) %>% slice(1:15)
+top_moderna <- moderna %>% arrange(desc(count)) %>% slice(1:15)
+top_pfizer <- pfizer %>% arrange(desc(count)) %>% slice(1:15)
+
+top_symptoms <- rbind(top_janssen, top_moderna, top_pfizer)
+top_symptoms$type <- paste("symptom")
+
+
+
+
+```
+
+A links dataframe will be finalized by creating to and from relationship columns between the top symptoms and manufacturers. A nodes dataframe will be finalized by combining the manufacturers and a unique entries only top symptoms list. 
+
+```{r}
+
+top_links <-
+  links %>% left_join(top_symptoms, by = c("vax_manu", "symptoms")) %>% drop_na() %>% distinct(vax_manu, symptoms, prr, type) %>% rename(from = vax_manu, to = symptoms)
+
+top_nodes <- top_links %>% rename(node = to) %>% distinct(node, type)
+
+top_nodes <- rbind(top_nodes, vaccine_node) 
+
+g <- graph_from_data_frame(top_links, directed = FALSE, vertices = top_nodes)
+```
+
+Some basic information about the graph data base from below. There are 25 nodes, made up of 22 symptoms and 3 manufacturers and 45 edges. 
+```{r}
+#count number of nodes
+
+vcount(g)
+
+#count number of edges
+
+ecount(g)
+
+#name the network
+
+g$name <- "COVID-19 VAERS network"
+
+print(g)
+
+```
+
+
+
+### Findings
+
+My fairly simple network diagram has a single attribute for the nodes, whether it is a symptom or a manufacturer, as well as a single attribute for the relationship which is the proportional reporting ratio.  
+
+```{r, message=FALSE, warning=FALSE, fig.width=10,fig.height=6}
+
+
+ggraph(g, layout = "with_kk") + 
+  geom_edge_link(aes(alpha=prr)) + geom_node_point() + geom_node_text(aes(label = name), repel = TRUE)
+
+
+```
+
+Here is the network anaylsis based on the top top 15 reported symptoms per manufacturer. 45 were pulled, but there are only 22 unique symptom nodes. 
+
+
+You can see the manufacturers in the center, distinguished by the all caps. Symptoms radiate out from there. I have not included symptom to symptom relationships, but since VAERS is individualized data, that could be interesting to explore. 
+
+
+You can see that there is a good mix of shared top symptoms as well as one that are unique to the manufacturer with regards to the top 15s. Additionally, the weight of the line will tell you if overall the symptom is more frequently reported with that manufacturer. 
+
+ 
+
+So some of the darkest lines show up over on the right side with Moderna which seem to be injection site reactions and then over on the left, Janssen has hyperhidrosis or excessive sweating. 
+
+
+### Conclusions 
+
+A few takeaways that I have:
+
+* Network analysis is a good tool for analyzing and visualizing vaccine-symptom relationships
+
+ 
+
+* Top symptoms are not the same across COVID-19 vaccine manufacturers  
+
+ 
+
+* Text analysis is not the best for identifying adverse event patterns 
+
+ 
+
+* Spending more time with the attributes in the graph database and symptom-symptom relationships would give even further insights into adverse event patterns 
+
